@@ -111,8 +111,8 @@ def plot_regressor_square_edges(
     if transform_fn is None:
 
         def transform_fn(x_all, xs, ys):
-            # f = interp1d(xs, ys)
-            f = Rbf(xs, ys)
+            f = interp1d(xs, ys)
+            # f = Rbf(xs, ys)
 
             return f(x_all)
 
@@ -144,8 +144,8 @@ def plot_regressor_square_edges(
             pred = likelihood(output)
             lower, upper = pred.confidence_region()
 
-            # torch.manual_seed(0)
-            # samples = output.sample(torch.Size([num_samples]))
+            torch.manual_seed(0)
+            samples = output.sample(torch.Size([num_samples]))
 
         tmp_filtered_xs = filtered_test_x[:, edge_ind_to_x_ind[edge_ind]]
         tmp_filtered_x_all = np.linspace(
@@ -155,21 +155,29 @@ def plot_regressor_square_edges(
 
         tmp_ax.plot(
             tmp_filtered_x_all,
-            unnormalize_fn(transform_fn(tmp_filtered_x_all, tmp_filtered_xs, mean)),
+            unnormalize_fn(transform_fn(tmp_filtered_x_all, tmp_filtered_xs, mean))[0],
             label="mean",
         )
 
+        for i in range(num_samples):
+            tmp_ax.plot(
+                tmp_filtered_x_all,
+                unnormalize_fn(transform_fn(tmp_filtered_x_all, tmp_filtered_xs, samples[..., i, :]))[0],
+                linestyle="--",
+                alpha=0.5
+            )
+
         tmp_ax.fill_between(
             tmp_filtered_x_all,
-            unnormalize_fn(transform_fn(tmp_filtered_x_all, tmp_filtered_xs, lower)),
-            unnormalize_fn(transform_fn(tmp_filtered_x_all, tmp_filtered_xs, upper)),
+            unnormalize_fn(transform_fn(tmp_filtered_x_all, tmp_filtered_xs, lower))[0],
+            unnormalize_fn(transform_fn(tmp_filtered_x_all, tmp_filtered_xs, upper))[0],
             alpha=0.1,
             label="CI",
         )
 
         tmp_ax.scatter(
             filtered_train_x[:, edge_ind_to_x_ind[edge_ind]],
-            unnormalize_fn(filtered_train_y),
+            unnormalize_fn(filtered_train_y)[0],
             marker="x",
             c="k",
             label="obs",
@@ -212,23 +220,23 @@ def plot_regressor_square(
     mask = filter_mask_square(cat_ind1, cat_ind2, an_ind1, an_ind2, x_test)
     valid_x_test = x_test[mask]
 
-    sorted_valid_x_test = sorted(valid_x_test, key=lambda x: (x[..., cat_ind1], x[..., an_ind1]))
-    sorted_valid_x_test = torch.vstack(sorted_valid_x_test)
+    # sorted_valid_x_test = sorted(valid_x_test, key=lambda x: (x[..., cat_ind1], x[..., an_ind1]))
+    # sorted_valid_x_test = torch.vstack(sorted_valid_x_test)
 
     with torch.no_grad():
-        output = gp(sorted_valid_x_test)
+        output = gp(valid_x_test)
         mean = output.mean
         sd = output.stddev
 
         # pred = likelihood(output)
         # sd = pred.stddev
 
-    mean_interpolator = Rbf(valid_x_test[:, cat_ind1], valid_x_test[:, an_ind1], mean)
+    mean_interpolator = Rbf(valid_x_test[:, cat_ind1], valid_x_test[:, an_ind1], unnormalize_fn(mean)[0])
     interp_mean = mean_interpolator(
         filtered_x_test[:, cat_ind1], filtered_x_test[:, an_ind1]
     )
 
-    sd_interpolator = Rbf(valid_x_test[:, cat_ind1], valid_x_test[:, an_ind1], sd)
+    sd_interpolator = Rbf(valid_x_test[:, cat_ind1], valid_x_test[:, an_ind1], unnormalize_fn(sd)[1])
     interp_sd = sd_interpolator(
         filtered_x_test[:, cat_ind1], filtered_x_test[:, an_ind1]
     )
@@ -238,7 +246,7 @@ def plot_regressor_square(
 
     # predictive mean
     c = ax[0].imshow(
-        unnormalize_fn(interp_mean.reshape(13, 13).T),
+        interp_mean.reshape(13, 13).T,
         origin="lower",
         extent=[0, 1, 0, 1],
         interpolation="gaussian",
@@ -248,8 +256,8 @@ def plot_regressor_square(
     for ind in range(filtered_x_train.shape[0]):
         ax[0].text(
             filtered_x_train[ind, cat_ind1],
-            filtered_x_train[ind, 5],
-            f"{unnormalize_fn(filtered_y_train[ind].item()):.0f}",
+            filtered_x_train[ind, an_ind1],
+            f"{unnormalize_fn(filtered_y_train[ind].item())[0]:.0f}",
             c="r",
             ha="center",
             va="bottom",
@@ -263,7 +271,7 @@ def plot_regressor_square(
 
     # predictive sd
     c = ax[1].imshow(
-        unnormalize_fn(interp_sd.reshape(13, 13).T),
+        interp_sd.reshape(13, 13).T,
         origin="lower",
         extent=[0, 1, 0, 1],
         interpolation="gaussian",
@@ -271,7 +279,7 @@ def plot_regressor_square(
     plt.colorbar(c, ax=ax[1])
 
     ax[1].scatter(
-        filtered_x_train[:, cat_ind1], filtered_x_train[:, 5], c="r", label="obs"
+        filtered_x_train[:, cat_ind1], filtered_x_train[:, an_ind1], c="r", label="obs"
     )
 
     ax[1].set_xlabel(xlabel)
