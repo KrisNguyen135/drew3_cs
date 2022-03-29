@@ -206,6 +206,8 @@ def plot_regressor_square(
     x_test,
     unnormalize_fn=None,
 ):
+    num_steps = 101
+
     if unnormalize_fn is None:
         unnormalize_fn = lambda x: x
 
@@ -216,12 +218,11 @@ def plot_regressor_square(
     filtered_x_train = x_train[mask]
     filtered_y_train = y_train[mask]
 
-    filtered_x_test = make_square(cat_ind1, cat_ind2, an_ind1, an_ind2, n_steps=13)
+    filtered_x_test = make_square(cat_ind1, cat_ind2, an_ind1, an_ind2, n_steps=num_steps)
     mask = filter_mask_square(cat_ind1, cat_ind2, an_ind1, an_ind2, x_test)
     valid_x_test = x_test[mask]
-
-    # sorted_valid_x_test = sorted(valid_x_test, key=lambda x: (x[..., cat_ind1], x[..., an_ind1]))
-    # sorted_valid_x_test = torch.vstack(sorted_valid_x_test)
+    valid_x_test = torch.unique(valid_x_test, dim=0)
+    valid_x_test = torch.vstack(sorted(valid_x_test, key=lambda x: (x[cat_ind1], x[an_ind1])))
 
     with torch.no_grad():
         output = gp(valid_x_test)
@@ -231,22 +232,12 @@ def plot_regressor_square(
         # pred = likelihood(output)
         # sd = pred.stddev
 
-    mean_interpolator = Rbf(valid_x_test[:, cat_ind1], valid_x_test[:, an_ind1], unnormalize_fn(mean)[0])
-    interp_mean = mean_interpolator(
-        filtered_x_test[:, cat_ind1], filtered_x_test[:, an_ind1]
-    )
-
-    sd_interpolator = Rbf(valid_x_test[:, cat_ind1], valid_x_test[:, an_ind1], unnormalize_fn(sd)[1])
-    interp_sd = sd_interpolator(
-        filtered_x_test[:, cat_ind1], filtered_x_test[:, an_ind1]
-    )
-
     pad = 20
     fig, ax = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
 
     # predictive mean
     c = ax[0].imshow(
-        interp_mean.reshape(13, 13).T,
+        unnormalize_fn(mean)[0].reshape(num_steps, num_steps).T,
         origin="lower",
         extent=[0, 1, 0, 1],
         interpolation="gaussian",
@@ -271,7 +262,7 @@ def plot_regressor_square(
 
     # predictive sd
     c = ax[1].imshow(
-        interp_sd.reshape(13, 13).T,
+        unnormalize_fn(sd)[1].reshape(num_steps, num_steps).T,
         origin="lower",
         extent=[0, 1, 0, 1],
         interpolation="gaussian",
